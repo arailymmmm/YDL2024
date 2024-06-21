@@ -1,72 +1,67 @@
-import numpy as np
-import pandas as pd
 import streamlit as st
-import seaborn as sns
+import pandas as pd
+import os
 import matplotlib.pyplot as plt
-import requests
-import io
-
-@st.cache_data
-def load_data():
-    url = "https://raw.githubusercontent.com/mwaskom/seaborn-data/master/tips.csv"
-    response = requests.get(url)
-    data = response.content.decode('utf-8')
-    df = pd.read_csv(io.StringIO(data))
-    return df
-
-tips = load_data()
-
-st.sidebar.title("YDL 2024 Sidebar!")
-st.sidebar.write("Hello, YDL!")
-
-smokers = st.sidebar.checkbox("Smokers only")
-if smokers:
-    tips = tips[tips['smoker'] == 'Yes']
+import seaborn as sns
 
 
+working_dir = os.path.dirname(os.path.abspath(__file__))
 
-days = list(tips["day"].unique())
-day_choice = st.sidebar.multiselect(
-    "Day",
-    days,
-    days,
-)
+folder_path = f"{working_dir}/data"
+files = [f for f in os.listdir(folder_path) if f.endswith('.xlsx')]
 
-time_choice = st.sidebar.selectbox(
-    "Time",
-    list(tips["time"].unique()),
-)
+selected_file = st.selectbox('Select a contamination type', files, index=None)
 
-if smokers:
-    tips = tips[tips["smoker"] == "Yes"]
+if selected_file:
+    file_path = os.path.join(folder_path, selected_file)
 
-tips = tips[tips["day"].isin(day_choice)]
+    columns_to_read = ["Frequency in Hz", "Dissipation factor", "Power factor", "C'", "C''"]
+    df = pd.read_excel(file_path, usecols=columns_to_read)
 
-tips = tips[tips["time"] == time_choice]
+    col1, col2 = st.columns(2)
 
-top_n = st.sidebar.slider("Top n", 1, len(tips), len(tips))
+    columns = df.columns.tolist()
 
-a = st.sidebar.slider("A", 1, 10, 5)
-b = st.sidebar.slider("B", 1, 10, 5)
+    with col1:
+        st.write("")
+        st.write(df.head())
 
-st.markdown(f"${a} + {b} = {a+b}$")
-st.markdown(f"${a} ^ {b} = {a**b}$")
+    with col2:
+        x_axis = st.selectbox('Select the X-axis', options=columns+["None"])
+        y_axis = st.selectbox('Select the Y-axis', options=columns+["None"])
 
-st.write("This is a simple example of a Streamlit app.")
+        plot_list = ['Line Plot', 'Bar Chart', 'Scatter Plot', 'Distribution Plot', 'Count Plot']
+        plot_type = st.selectbox('Select the type of plot', options=plot_list)
 
-st.write("Here is a histplot of the total bill.")
-fig = plt.figure()
-plt.title("Total Bill")
-sns.histplot(tips["total_bill"])
-st.pyplot(fig)
+    log_scale = st.checkbox('Log-Log Scale')
 
-# draw a plot of total bill vs tip
-st.write("Here is a scatter plot of total bill vs tip.")
-fig = plt.figure()
-plt.title("Total Bill vs Tip")
-sns.scatterplot(x="total_bill", y="tip", data=tips, hue="smoker")
-st.pyplot(fig)
+    if st.button('Generate Plot'):
+        sns.set_style('whitegrid')
+        fig, ax = plt.subplots(figsize=(20, 12))
 
-# show the data (head)
-st.write("Here is the data.")
-st.write(tips)
+        if plot_type == 'Line Plot':
+            sns.lineplot(x=df[x_axis], y=df[y_axis], ax=ax, marker='o')
+        elif plot_type == 'Bar Chart':
+            sns.barplot(x=df[x_axis], y=df[y_axis], ax=ax, palette='viridis')
+        elif plot_type == 'Scatter Plot':
+            sns.scatterplot(x=df[x_axis], y=df[y_axis], ax=ax, hue=df[y_axis], palette='viridis', s=100)
+        elif plot_type == 'Distribution Plot':
+            sns.histplot(df[y_axis], kde=True, ax=ax, color='skyblue')
+            ax.set_ylabel('Density')
+        elif plot_type == 'Count Plot':
+            sns.countplot(x=df[x_axis], ax=ax, palette='viridis')
+            ax.set_ylabel('Count')
+
+        if log_scale:
+            ax.set_xscale('log')
+            ax.set_yscale('log')
+
+        ax.set_title(f'{plot_type} of {y_axis} vs {x_axis}', fontsize=20, fontweight='bold')
+        ax.set_xlabel(x_axis, fontsize=14)
+        ax.set_ylabel(y_axis, fontsize=14)
+        ax.grid(True, which="both", ls="--")
+
+        ax.tick_params(axis='x', labelsize=12)
+        ax.tick_params(axis='y', labelsize=12)
+
+        st.pyplot(fig)
